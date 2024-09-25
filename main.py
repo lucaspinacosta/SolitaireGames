@@ -1,63 +1,32 @@
-
 import random
 import sys
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import (QApplication, QGraphicsItem, QGraphicsScene,
-                             QGraphicsView, QMainWindow)
+from PyQt5.QtGui import QBrush, QColor, QLinearGradient, QPainter, QPixmap
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
 
+from script.card_item import CardItem
 from script.cards import Card, Suit
-
-
-class CardItem(QGraphicsItem):
-    def __init__(self, card):
-        super().__init__()
-        self.card = card
-
-    # Override boundingRect, paint, and mouse events to manage drag-and-drop
-
-
-class TableauColumn:
-    def __init__(self):
-        self.cards = []
-
-    def add_card(self, card):
-        self.cards.append(card)
-
-    def remove_card(self):
-        return self.cards.pop()
-
-    def can_place_card(self, card):
-        # Add logic to determine if a card can be placed
-        pass
 
 
 class Solitaire(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('Solitaire Game')
-        self.setGeometry(100, 100, 800, 600)
+        self.setFixedSize(1000, 800)
 
-        # Create the game scene and view
-        self.scene = QGraphicsScene(self)
-        self.view = QGraphicsView(self.scene, self)
-        self.view.setGeometry(0, 0, 800, 600)
-        self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Set up the main layout to contain the game
+        self.central_widget = GameWidget(self)
+        self.setCentralWidget(self.central_widget)
 
-        # Initialize deck, tableau, foundation, stockpile, etc.
+        # Initialize deck and tableau
         self.deck = self.create_deck()
         self.tableau = [[] for _ in range(7)]  # 7 tableau columns
-        self.foundation = [[] for _ in range(4)]  # 4 foundation piles
-        self.stockpile = []  # Cards left in the deck
-        self.waste = []  # Cards drawn from the stockpile
-        self.back_side = "green_back"
 
-        self.card_width = 80  # Set card width
-        self.card_height = 120  # Set card height
+        self.central_widget.deck = self.deck
+        self.central_widget.tableau = self.tableau
 
-        self.deal_cards()  # Deal the initial cards to the tableau
+        self.deal_cards()
 
         self.show()
 
@@ -65,62 +34,75 @@ class Solitaire(QMainWindow):
         """Creates and shuffles a standard deck of 52 cards."""
         suits = [Suit.HEARTS.value, Suit.DIAMONDS.value,
                  Suit.CLUBS.value, Suit.SPADES.value]
-        # 1 = Ace, 11 = Jack, 12 = Queen, 13 = King
         values = list(range(1, 14))
         deck = [Card(suit, value) for suit in suits for value in values]
         random.shuffle(deck)
         return deck
 
     def deal_cards(self):
-        """Deals cards to the tableau. First column gets 1 card, second gets 2, etc."""
-        # Distribute cards to the tableau columns
+        """Deals cards to the tableau."""
         for i in range(7):
             for j in range(i + 1):
                 card = self.deck.pop()
                 if j == i:
                     card.flip()  # Flip the last card in the column to be face-up
                 self.tableau[i].append(card)
-                self.display_card(card, i, j)
+                self.central_widget.add_card(card, i, j)
 
-    def display_card(self, card, column, row):
-        """Displays a card on the screen."""
-        if card.is_face_up():
-            image_path = card.get_image_path()
-        else:
-            image_path = f'assets/back_side/{self.back_side}.png'
 
-        pixmap = QPixmap(image_path).scaled(
-            self.card_width, self.card_height, Qt.KeepAspectRatio)
-        pixmap_item = self.scene.addPixmap(pixmap)
+class GameWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.deck = []
+        self.tableau = []
+        self.card_width = 80
+        self.card_height = 120
+        self.cards = []
+        self.dragged_card = None  # The currently dragged card
 
-        # Dynamically calculate positions based on the card size and the column/row layout
-        # Spacing between columns
-        x_position = 100 + column * (self.card_width + 20)
-        # Overlapping the cards within a column
-        y_position = 50 + row * (self.card_height // 4)
+    def add_card(self, card, column, row):
+        """Adds card information to be drawn later."""
+        card_item = CardItem(card, self.card_width, self.card_height)
+        x_position = 150 + column * (self.card_width + 20)
+        y_position = 200 + row * (self.card_height // 4)
+        self.cards.append((card_item, x_position, y_position))
+        self.update()
 
-        pixmap_item.setPos(x_position, y_position)
+    def paintEvent(self, event):
+        painter = QPainter(self)
 
-        # Add interactivity (drag and drop, etc.)
-        pixmap_item.setFlag(pixmap_item.ItemIsMovable)
+        # Draw gradient background
+        gradient = QLinearGradient(0, 0, 0, self.height())
+        gradient.setColorAt(0.0, QColor('#2196F3'))  # Start color (blue)
+        gradient.setColorAt(1.0, QColor('#4CAF50'))  # End color (green)
+        painter.fillRect(self.rect(), gradient)
 
-    def move_card(self, source, destination):
-        """Moves a card from the source pile to the destination."""
-        # Example of moving cards from tableau to foundation, etc.
-        card = source.pop()
-        destination.append(card)
+        # Draw the cards on the widget
+        for card_item, x, y in self.cards:
+            card_item.render(painter, x, y)
 
-    def is_win(self):
-        """Checks if all foundation piles are complete."""
-        return all(len(pile) == 13 for pile in self.foundation)
-      
-    def resizeEvent(self, event):
-        """Override resize event to make sure everything scales when the window is resized."""
-        # Fit the scene into the view without scrollbars
-        self.view.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
+    def mousePressEvent(self, event):
+        """Handle the mouse press to start dragging a card."""
+        for card_item, x, y in self.cards:
+            if card_item.contains_point(event.pos()):
+                card_item.mousePressEvent(event)
+                if card_item.is_being_dragged:
+                    self.dragged_card = card_item
+                    break
 
-        # Call the base resize event handler
-        super().resizeEvent(event)
+    def mouseMoveEvent(self, event):
+        """Handle the mouse move event to drag the card."""
+        if self.dragged_card:
+            self.dragged_card.mouseMoveEvent(event)
+            self.update()
+
+    def mouseReleaseEvent(self, event):
+        """Handle the mouse release to snap the card."""
+        if self.dragged_card:
+            self.dragged_card.mouseReleaseEvent(
+                event, [card_item for card_item, x, y in self.cards])
+            self.dragged_card = None
+            self.update()
 
 
 if __name__ == "__main__":

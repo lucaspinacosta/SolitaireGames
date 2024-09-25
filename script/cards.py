@@ -42,8 +42,3 @@ class Card:
         face_status = "Face-Up" if self.face_up else "Face-Down"
         return f"{self.value} of {self.suit} ({face_status})"
 
-
-# Example usage with the Suit enum
-# card = Card(Suit.HEARTS, 1)  # Ace of Hearts
-# print(card)  # "1 of Hearts (Face-Down)"
-# print(card.get_image_path())
