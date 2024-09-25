@@ -1,6 +1,5 @@
 from PyQt5.QtCore import QPointF, QRectF, Qt
-from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor
-from PyQt5.QtWidgets import QWidget
+from PyQt5.QtGui import QColor, QPainter, QPen, QPixmap
 
 
 class CardItem:
@@ -24,10 +23,11 @@ class CardItem:
         # Original position for snapping back
         self.original_pos = QPointF(0, 0)
 
-        # For group dragging
-        self.child_cards = []
+        # For dragging
         self.is_being_dragged = False  # To track dragging
         self.is_selected = False  # To track selection for highlighting
+        # Store offset to handle smooth dragging
+        self.drag_offset = QPointF(0, 0)
 
     def render(self, painter, x, y):
         """Manually draw the card using the given QPainter."""
@@ -49,60 +49,26 @@ class CardItem:
 
     def mousePressEvent(self, event):
         """Start dragging when the mouse is pressed."""
+        # Only allow face-up cards to be dragged
+        if not self.card.is_face_up():
+            return
+
         if self.contains_point(event.pos()):
             self.is_being_dragged = True
             self.is_selected = True  # Highlight when selected
             self.original_pos = self.pos
+            self.drag_offset = event.pos() - self.pos  # Calculate the drag offset
 
     def mouseReleaseEvent(self, event, other_cards):
         """Stop dragging and snap the card when the mouse is released."""
         self.is_being_dragged = False
         self.is_selected = False  # Remove highlight after release
-        self.snap_to_closest(other_cards)
 
     def mouseMoveEvent(self, event):
         """Move the card while it's being dragged."""
         if self.is_being_dragged:
-            delta = event.pos() - self.pos
-            self.move_card(delta.x(), delta.y())
-
-    def move_card(self, delta_x, delta_y):
-        """Move the card by a certain offset and update the child cards."""
-        new_x = self.pos.x() + delta_x
-        new_y = self.pos.y() + delta_y
-        self.pos = QPointF(new_x, new_y)
-
-        # Move child cards along with this card
-        for idx, child_card in enumerate(self.child_cards):
-            child_card.move_card(0, (idx + 1) * (self.height // 4))
-
-    def snap_to_closest(self, other_cards):
-        """Find the closest card from a list of other cards and snap to it."""
-        closest_card_item = self.find_closest_card(other_cards)
-        if closest_card_item:
-            # Snap to the position below the closest card
-            target_pos = closest_card_item.pos + QPointF(0, self.height // 4)
-            self.pos = target_pos
-
-            # Also snap child cards to follow this card
-            for idx, child_card in enumerate(self.child_cards):
-                child_card.move_card(0, (idx + 1) * (self.height // 4))
-
-    def find_closest_card(self, other_cards):
-        """Find the closest card for snapping purposes."""
-        min_distance = float('inf')
-        closest_card_item = None
-
-        snapping_distance = 50  # Define a reasonable snapping distance
-
-        for card_item in other_cards:
-            if card_item != self:
-                distance = (card_item.pos - self.pos).manhattanLength()
-                if distance < min_distance and distance < snapping_distance:
-                    min_distance = distance
-                    closest_card_item = card_item
-
-        return closest_card_item
+            # Move the card based on the mouse position minus the drag offset
+            self.pos = event.pos() - self.drag_offset
 
     def contains_point(self, point):
         """Check if a point is within the bounding rect of the card."""

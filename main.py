@@ -73,8 +73,8 @@ class GameWidget(QWidget):
 
         # Draw gradient background
         gradient = QLinearGradient(0, 0, 0, self.height())
-        gradient.setColorAt(0.0, QColor('#2196F3'))  # Start color (blue)
-        gradient.setColorAt(1.0, QColor('#4CAF50'))  # End color (green)
+        gradient.setColorAt(0.0, QColor('#09175c'))
+        gradient.setColorAt(1.0, QColor('#bdb4ff'))
         painter.fillRect(self.rect(), gradient)
 
         # Draw the cards on the widget
@@ -103,7 +103,6 @@ class GameWidget(QWidget):
                 event, [card_item for card_item, x, y in self.cards])
             self.dragged_card = None
             self.update()
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
